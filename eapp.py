@@ -172,7 +172,7 @@ def main():
              st.session_state.initial_pos_val = " ".join([str(i % (limit + 1)) for i in range(rotor_count)])
         if p2.button("랜덤", key="pos_rnd", use_container_width=True):
             st.session_state.initial_pos_val = " ".join([str(random.randint(0, limit)) for i in range(rotor_count)])
-        if p3.button("초기화", key="pos_reset", use_container_width=True, help="모두 0으로 설정"):
+        if p3.button("리셋", key="pos_reset", use_container_width=True, help="모두 0으로 설정"):
             st.session_state.initial_pos_val = " ".join(["0"] * rotor_count)
 
         initial_pos_str = st.text_input("초기 위치", key="initial_pos_val", label_visibility="collapsed")
@@ -240,3 +240,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
