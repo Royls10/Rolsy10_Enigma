@@ -139,15 +139,16 @@ def validate_input_precision(text, count, limit_val=None, type="rotor"):
 #  [UI] Streamlit 웹 인터페이스
 # ==============================================================================
 def main():
-    st.set_page_config(page_title="Universal Enigma v2.3", page_icon="🔐", layout="wide")
+    st.set_page_config(page_title="Universal Enigma v2.4", page_icon="🔐", layout="wide")
 
     # 상태 초기화
     if 'rotor_order_val' not in st.session_state: st.session_state.rotor_order_val = "1 2 3"
     if 'initial_pos_val' not in st.session_state: st.session_state.initial_pos_val = "0 0 0"
     if 'seed_val' not in st.session_state: st.session_state.seed_val = "Royls_Secret"
     if 'rotor_count_val' not in st.session_state: st.session_state.rotor_count_val = 3
-    if 'last_op_mode' not in st.session_state: st.session_state.last_op_mode = None 
     if 'last_result' not in st.session_state: st.session_state.last_result = ""
+    # [NEW] 작업 실행 여부 확인
+    if 'is_processed' not in st.session_state: st.session_state.is_processed = False
 
     # ─────────────────────────────────────────────────────────────
     # [1] 사이드바
@@ -165,8 +166,8 @@ def main():
                         st.session_state.rotor_count_val = int(parts[1])
                         st.session_state.rotor_order_val = parts[2]
                         st.session_state.initial_pos_val = parts[3]
-                        st.session_state.last_op_mode = None
                         st.session_state.last_result = ""
+                        st.session_state.is_processed = False
                         st.success("동기화 완료")
                         st.rerun()
                     else: st.error("형식 오류")
@@ -216,7 +217,7 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # [2] 메인 작업 공간
     # ─────────────────────────────────────────────────────────────
-    st.title("🌌 Universal Enigma v2.3")
+    st.title("🌌 Universal Enigma v2.4")
     
     if not is_ready:
         st.warning("⚠️ 좌측 설정의 붉은색 오류를 해결해야 작동합니다.")
@@ -239,46 +240,24 @@ def main():
             st.markdown("#### 📥 입력")
             text_in = st.text_area("Input", height=350, label_visibility="collapsed")
             
-            c_act1, c_act2 = st.columns(2)
-            
-            # [COLOR LOGIC] 버튼 색상 결정을 위한 동적 변수
-            # 현재 상태가 ENC면 암호화버튼=Primary(강조), 아니면 Secondary
-            enc_btn_type = "primary" if st.session_state.last_op_mode == "ENC" else "secondary"
-            dec_btn_type = "primary" if st.session_state.last_op_mode == "DEC" else "secondary"
-            
-            # [BUTTONS] 동적 타입 적용
-            if c_act1.button("🚀 암호화 (Encrypt)", type=enc_btn_type, use_container_width=True):
+            # [UNIFIED] 버튼 하나로 통합
+            if st.button("🔄 암호화 / 복호화 실행", type="primary", use_container_width=True):
                 if text_in:
                     st.session_state.last_result = process_core(text_in)
-                    st.session_state.last_op_mode = "ENC"
-                    st.rerun() # 색상 즉시 변경을 위해 재실행
-            
-            if c_act2.button("🔓 복호화 (Decrypt)", type=dec_btn_type, use_container_width=True):
-                if text_in:
-                    st.session_state.last_result = process_core(text_in)
-                    st.session_state.last_op_mode = "DEC"
-                    st.rerun() # 색상 즉시 변경을 위해 재실행
+                    st.session_state.is_processed = True
+                    st.rerun()
 
         with col2:
-            if st.session_state.last_op_mode == "ENC":
-                st.markdown("#### 🔒 :red[암호화 결과]")
-                st.text_area("Output", value=st.session_state.last_result, height=350)
-            elif st.session_state.last_op_mode == "DEC":
-                st.markdown("#### 🔓 :blue[복호화 결과]")
+            if st.session_state.is_processed:
+                st.markdown("#### 🔄 변환 결과") # 통합 헤더
                 st.text_area("Output", value=st.session_state.last_result, height=350)
             else:
                 st.markdown("#### 📤 결과 대기")
-                st.text_area("Output", value="작업을 실행하세요.", height=350, disabled=True)
+                st.text_area("Output", value="좌측에서 실행 버튼을 누르세요.", height=350, disabled=True)
 
     # --- 파일 모드 ---
     with tab_file:
-        st.info("텍스트 파일(.txt)을 업로드하여 내용을 변환합니다.")
-        
-        mode_select = st.radio(
-            "작업 모드 선택:",
-            ("암호화 (Encrypt)", "복호화 (Decrypt)"),
-            horizontal=True
-        )
+        st.info("텍스트 파일(.txt)을 업로드하여 내용을 변환합니다. (암/복호화 동일)")
         
         uploaded_file = st.file_uploader("파일 선택", type=['txt'], label_visibility="collapsed")
         
@@ -286,25 +265,17 @@ def main():
             string_data = uploaded_file.getvalue().decode("utf-8")
             st.caption(f"파일명: {uploaded_file.name} ({len(string_data)}자)")
             
-            if st.button(f"🚀 {mode_select} 실행", type="primary", use_container_width=True):
+            # [UNIFIED] 파일 버튼도 하나로 통합
+            if st.button("🚀 변환 및 저장", type="primary", use_container_width=True):
                 try:
                     res = process_core(string_data)
-                    if "암호화" in mode_select:
-                        st.success("🔒 암호화 완료! 다운로드하세요.")
-                        st.download_button(
-                            "💾 암호화 파일 다운로드 (encrypted.txt)", 
-                            data=res.encode('utf-8'), 
-                            file_name="encrypted.txt", 
-                            mime="text/plain", use_container_width=True
-                        )
-                    else:
-                        st.info("🔓 복호화 완료! 다운로드하세요.")
-                        st.download_button(
-                            "💾 복호화 파일 다운로드 (decrypted.txt)", 
-                            data=res.encode('utf-8'), 
-                            file_name="decrypted.txt", 
-                            mime="text/plain", use_container_width=True
-                        )
+                    st.success("✅ 변환 완료! 아래 버튼을 눌러 저장하세요.")
+                    st.download_button(
+                        "💾 변환된 파일 다운로드 (converted.txt)", 
+                        data=res.encode('utf-8'), 
+                        file_name="converted.txt", 
+                        mime="text/plain", use_container_width=True
+                    )
                 except Exception as e:
                     st.error(f"오류 발생: {e}")
 
