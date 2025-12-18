@@ -104,7 +104,7 @@ def setup_parts(seed, max_rotor_index):
 
 
 # ==============================================================================
-#  [UI] Streamlit 웹 인터페이스
+#  [UI] Streamlit 웹 인터페이스 (수정됨: 제한 해제)
 # ==============================================================================
 def main():
     st.set_page_config(page_title="Universal Enigma", page_icon="🔐")
@@ -118,7 +118,8 @@ def main():
         seed_key = st.text_input("1. 마스터 키 (Seed)", value="Royls_Secret", type="password")
         st.caption("※ 이 키가 같아야만 복호화가 가능합니다.")
         
-        rotor_count = st.number_input("2. 로터 개수", min_value=1, max_value=100, value=3)
+        # [수정됨] max_value 제한을 제거하여 무제한 입력 가능
+        rotor_count = st.number_input("2. 로터 개수", min_value=1, value=3, help="원하는 만큼 숫자를 올릴 수 있습니다.")
         
         default_order = " ".join([str(i+1) for i in range(rotor_count)])
         rotor_order_str = st.text_input(f"3. 로터 순서 ({rotor_count}개)", value=default_order)
@@ -147,10 +148,11 @@ def main():
             if len(set(order)) != len(order): st.error("로터 순서에 중복된 번호가 있습니다."); return None
             
             # 실행
-            ROTOR_BANK, REFLECTOR = setup_parts(seed_key, max(order))
-            machine = InfiniteEnigmaMachine([ROTOR_BANK[n] for n in order], REFLECTOR, pos)
-            
-            processed = machine.process_text(text)
+            with st.spinner('에니그마 가동 중...'):
+                ROTOR_BANK, REFLECTOR = setup_parts(seed_key, max(order))
+                machine = InfiniteEnigmaMachine([ROTOR_BANK[n] for n in order], REFLECTOR, pos)
+                processed = machine.process_text(text)
+                
             return combine_hangul(processed)
             
         except ValueError:
