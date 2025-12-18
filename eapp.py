@@ -4,7 +4,7 @@ import string
 import sys
 
 # ==============================================================================
-#  [CORE] 유니버설 에니그마 엔진 (수정 없음)
+#  [CORE] 유니버설 에니그마 엔진 (변경 없음)
 # ==============================================================================
 
 # --- 문자셋 정의 ---
@@ -104,171 +104,148 @@ def setup_parts(seed, max_rotor_index):
 
 
 # ==============================================================================
-#  [UI] Streamlit 웹 인터페이스 (전면 개편)
+#  [UI] Streamlit 웹 인터페이스 (최종: 초기화 버튼 로직 수정)
 # ==============================================================================
 def main():
     st.set_page_config(page_title="Universal Enigma", page_icon="🔐", layout="wide")
 
-    st.title("🌌 Universal Enigma Web")
-    st.caption("Infinity Edition | No Limits, Strict Security")
-    
-    # 세션 상태 초기화 (입력창과 버튼 연동용)
+    # 세션 상태 초기화
     if 'rotor_order_val' not in st.session_state: st.session_state.rotor_order_val = "1 2 3"
     if 'initial_pos_val' not in st.session_state: st.session_state.initial_pos_val = "0 0 0"
 
     # ─────────────────────────────────────────────────────────────
-    # [1] 기본 설정 (사이드바)
+    # [1] 사이드바: 설정 패널
     # ─────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.header("⚙️ 기본 설정")
+        st.title("⚙️ 설정 (Settings)")
+        
+        # 1. Seed & Count
         seed_key = st.text_input("1. 마스터 키 (Seed)", value="Royls_Secret", type="password")
-        
-        # [수정 1] Max 제한 삭제 + 수학적 경고
-        # Streamlit Free Tier (~1GB RAM) 기준:
-        # 로터 1개 객체 = 약 600바이트 (알파벳 146개 기준). 
-        # 100만개 = 약 600MB. 150만개 넘으면 위험.
-        rotor_count = st.number_input("2. 로터 개수", min_value=1, value=3, step=1, help="제한은 없습니다. 단, 100만 개 이상은 서버 메모리를 초과할 수 있습니다.")
-        
-        if rotor_count >= 10000:
-            st.warning("⚠️ 로터가 많습니다. 연산이 느려질 수 있습니다.")
-        if rotor_count >= 1000000:
-            st.error("🚨 경고: 100만 개 이상은 서버가 다운될 확률이 높습니다.")
+        rotor_count = st.number_input("2. 로터 개수", min_value=1, value=3, step=1, help="제한 없음 (100만개 이상 주의)")
 
-    # ─────────────────────────────────────────────────────────────
-    # [2] 스마트 프리셋 및 검증 (메인 화면)
-    # ─────────────────────────────────────────────────────────────
-    col1, col2 = st.columns(2)
+        if rotor_count >= 10000: st.warning("⚠️ 로터가 많습니다.")
+        if rotor_count >= 1000000: st.error("🚨 100만개 이상: 메모리 부족 위험!")
 
-    # --- 로터 순서 설정 ---
-    with col1:
-        st.subheader(f"3. 로터 순서 ({rotor_count}개)")
-        st.caption("중복 불가 (1 ~ N)")
+        st.markdown("---")
+
+        # 2. 로터 순서
+        st.subheader(f"3. 로터 순서")
+        st.caption(f"1 ~ {rotor_count} (중복 불가)")
         
-        # 프리셋 버튼
-        b1, b2, b3, b4 = st.columns(4)
-        if b1.button("순차 정렬", key="ro_seq", use_container_width=True):
+        # 버튼 4개
+        b1, b2, b3, b4 = st.columns(4) 
+        if b1.button("순차", key="ro_seq", use_container_width=True):
             st.session_state.rotor_order_val = " ".join([str(i+1) for i in range(rotor_count)])
-        if b2.button("완전 랜덤", key="ro_rnd", use_container_width=True):
+        if b2.button("랜덤", key="ro_rnd", use_container_width=True):
             nums = list(range(1, rotor_count + 1))
             random.shuffle(nums)
             st.session_state.rotor_order_val = " ".join(map(str, nums))
-        if b3.button("역순 정렬", key="ro_rev", use_container_width=True):
+        if b3.button("역순", key="ro_rev", use_container_width=True):
             st.session_state.rotor_order_val = " ".join([str(i) for i in range(rotor_count, 0, -1)])
-        if b4.button("직접 설정", key="ro_man", use_container_width=True, disabled=True):
-             pass # 텍스트 필드가 곧 직접 설정임
-
-        # 입력창 (세션 상태 바인딩)
-        rotor_order_str = st.text_input("로터 순서 입력", key="rotor_order_val", label_visibility="collapsed")
+        # [수정됨] 초기화 버튼 누르면 '1 2 3 4...' 순차(기본값)로 복원
+        if b4.button("초기화", key="ro_reset", use_container_width=True, help="1부터 순서대로(기본값) 채웁니다."):
+            st.session_state.rotor_order_val = " ".join([str(i+1) for i in range(rotor_count)])
         
-        # [검증 로직]
+        rotor_order_str = st.text_input("로터 순서 입력", key="rotor_order_val", label_visibility="collapsed", placeholder="숫자를 공백으로 구분하여 입력 (예: 1 5 3)")
+
+        # 검증
         ro_valid = True
         ro_error_msg = ""
-        try:
-            ro_list = list(map(int, rotor_order_str.split()))
-            if len(ro_list) != rotor_count:
-                ro_valid = False
-                ro_error_msg = f"숫자가 {len(ro_list)}개입니다. {rotor_count}개가 필요합니다."
-            elif len(set(ro_list)) != len(ro_list):
-                ro_valid = False
-                ro_error_msg = "중복된 로터 번호가 있습니다. 로터는 유일해야 합니다."
-            elif any(n < 1 for n in ro_list):
-                ro_valid = False
-                ro_error_msg = "로터 번호는 1 이상이어야 합니다."
-        except:
-            ro_valid = False
-            ro_error_msg = "숫자와 공백으로만 입력해주세요."
+        if not rotor_order_str.strip():
+             ro_valid = False; ro_error_msg = "값을 입력해주세요."
+        else:
+            try:
+                ro_list = list(map(int, rotor_order_str.split()))
+                if len(ro_list) != rotor_count:
+                    ro_valid = False; ro_error_msg = f"숫자 {len(ro_list)}개 (필요: {rotor_count})"
+                elif len(set(ro_list)) != len(ro_list):
+                    ro_valid = False; ro_error_msg = "중복된 번호 발견"
+                elif any(n < 1 for n in ro_list):
+                    ro_valid = False; ro_error_msg = "1 이상의 숫자 필요"
+            except: ro_valid = False; ro_error_msg = "형식 오류 (숫자만 입력)"
 
-        if not ro_valid:
-            st.error(f"❌ 오류: {ro_error_msg}")
+        if not ro_valid: st.error(f"❌ {ro_error_msg}")
 
-    # --- 초기 위치 설정 ---
-    with col2:
+        st.markdown("---")
+
+        # 3. 초기 위치
         limit = ALPHABET_SIZE - 1
-        st.subheader(f"4. 초기 위치 (0 ~ {limit})")
-        st.caption("중복 허용")
+        st.subheader(f"4. 초기 위치")
+        st.caption(f"0 ~ {limit} (중복 허용)")
 
-        # 프리셋 버튼
         p1, p2, p3, p4 = st.columns(4)
-        if p1.button("순차/0", key="pos_seq", use_container_width=True): # 보통은 000을 선호하므로 0부터 순차
-             st.session_state.initial_pos_val = " ".join([str(i % (limit + 1)) for i in range(rotor_count)])
-        if p2.button("완전 랜덤", key="pos_rnd", use_container_width=True):
+        if p1.button("000", key="pos_zero", use_container_width=True):
+            st.session_state.initial_pos_val = " ".join(["0"] * rotor_count)
+        if p2.button("랜덤", key="pos_rnd", use_container_width=True):
             st.session_state.initial_pos_val = " ".join([str(random.randint(0, limit)) for i in range(rotor_count)])
-        if p3.button("역순 정렬", key="pos_rev", use_container_width=True):
-            st.session_state.initial_pos_val = " ".join([str((limit - i) % (limit + 1)) for i in range(rotor_count)])
-        if p4.button("0 초기화", key="pos_reset", use_container_width=True): # 직접 설정 대신 가장 많이 쓰는 0 초기화
+        if p3.button("순차", key="pos_seq", use_container_width=True):
+             st.session_state.initial_pos_val = " ".join([str(i % (limit + 1)) for i in range(rotor_count)])
+        # [수정됨] 초기화 버튼 누르면 '0 0 0...' (기본값)으로 복원
+        if p4.button("초기화", key="pos_reset", use_container_width=True, help="모두 0으로 채웁니다."):
             st.session_state.initial_pos_val = " ".join(["0"] * rotor_count)
 
-        # 입력창
-        initial_pos_str = st.text_input("초기 위치 입력", key="initial_pos_val", label_visibility="collapsed")
+        initial_pos_str = st.text_input("초기 위치 입력", key="initial_pos_val", label_visibility="collapsed", placeholder="0 ~ 146 사이 숫자 입력")
 
-        # [검증 로직]
+        # 검증
         pos_valid = True
         pos_error_msg = ""
-        try:
-            pos_list = list(map(int, initial_pos_str.split()))
-            if len(pos_list) != rotor_count:
-                pos_valid = False
-                pos_error_msg = f"숫자가 {len(pos_list)}개입니다. {rotor_count}개가 필요합니다."
-            else:
-                # 범위 이탈 위치 찾기
-                wrong_indices = [i+1 for i, n in enumerate(pos_list) if not (0 <= n <= limit)]
-                if wrong_indices:
-                    pos_valid = False
-                    pos_error_msg = f"{wrong_indices}번째 숫자가 범위(0~{limit})를 벗어났습니다."
-        except:
-            pos_valid = False
-            pos_error_msg = "숫자와 공백으로만 입력해주세요."
+        if not initial_pos_str.strip():
+            pos_valid = False; pos_error_msg = "값을 입력해주세요."
+        else:
+            try:
+                pos_list = list(map(int, initial_pos_str.split()))
+                if len(pos_list) != rotor_count:
+                    pos_valid = False; pos_error_msg = f"숫자 {len(pos_list)}개 (필요: {rotor_count})"
+                else:
+                    wrong = [i+1 for i, n in enumerate(pos_list) if not (0 <= n <= limit)]
+                    if wrong: pos_valid = False; pos_error_msg = f"{wrong[0]}번째 숫자 범위 초과"
+            except: pos_valid = False; pos_error_msg = "형식 오류 (숫자만 입력)"
 
-        if not pos_valid:
-            st.error(f"❌ 오류: {pos_error_msg}")
+        if not pos_valid: st.error(f"❌ {pos_error_msg}")
+        
+        st.info(f"문자셋 크기: {ALPHABET_SIZE}")
 
-    st.markdown("---")
 
     # ─────────────────────────────────────────────────────────────
-    # [3] 실행 (암호화/복호화) - 검증 통과 시에만 활성화
+    # [2] 메인 화면
     # ─────────────────────────────────────────────────────────────
+    st.title("🌌 Universal Enigma Web")
     
-    # 모든 설정이 완벽한가?
     is_ready = seed_key and ro_valid and pos_valid
+
+    if not is_ready:
+        st.error("👈 왼쪽 사이드바의 설정 오류를 해결해야 작동합니다.")
 
     tab1, tab2 = st.tabs(["🔒 암호화 (Encrypt)", "🔓 복호화 (Decrypt)"])
 
     def run_process(text, mode):
-        # 최종 실행
         try:
-            with st.spinner('에니그마 연산 중...'):
+            with st.spinner('연산 중...'):
                 final_ro = list(map(int, rotor_order_str.split()))
                 final_pos = tuple(map(int, initial_pos_str.split()))
-                
-                # 로터 생성 및 조립
                 ROTOR_BANK, REFLECTOR = setup_parts(seed_key, max(final_ro))
                 machine = InfiniteEnigmaMachine([ROTOR_BANK[n] for n in final_ro], REFLECTOR, final_pos)
-                
                 processed = machine.process_text(text)
                 return combine_hangul(processed)
-        except Exception as e:
-            return f"Error: {str(e)}"
+        except Exception as e: return f"Error: {str(e)}"
 
     with tab1:
-        text_in = st.text_area("평문 입력", height=150, placeholder="비밀 내용을 입력하세요...")
-        if st.button("암호화 실행", type="primary", disabled=not is_ready, use_container_width=True):
-            if not text_in: st.warning("내용을 입력해주세요.")
-            else:
+        text_in = st.text_area("평문 입력", height=200, placeholder="비밀 메시지를 입력하세요...", label_visibility="collapsed")
+        if st.button("🚀 암호화 실행", type="primary", disabled=not is_ready, use_container_width=True):
+            if text_in:
                 res = run_process(text_in, 'encrypt')
-                st.success("결과:")
+                st.success("암호화 결과")
                 st.code(res, language=None)
+            else: st.warning("내용을 입력하세요.")
 
     with tab2:
-        cipher_in = st.text_area("암호문 입력", height=150, placeholder="받은 암호문을 붙여넣으세요...")
-        if st.button("복호화 실행", type="secondary", disabled=not is_ready, use_container_width=True):
-            if not cipher_in: st.warning("내용을 입력해주세요.")
-            else:
+        cipher_in = st.text_area("암호문 입력", height=200, placeholder="암호문을 붙여넣으세요...", label_visibility="collapsed")
+        if st.button("🔓 복호화 실행", type="secondary", disabled=not is_ready, use_container_width=True):
+            if cipher_in:
                 res = run_process(cipher_in, 'decrypt')
-                st.success("결과:")
+                st.success("복호화 결과")
                 st.code(res, language=None)
-    
-    if not is_ready:
-        st.caption("※ 위 설정(Seed, 로터 순서, 위치)의 오류를 해결해야 버튼이 활성화됩니다.")
+            else: st.warning("내용을 입력하세요.")
 
 if __name__ == "__main__":
     main()
